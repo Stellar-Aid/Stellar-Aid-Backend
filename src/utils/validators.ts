@@ -7,3 +7,4 @@ export const isPositiveAmount_6 = (n: number) => n > 0;
 export const isPositiveAmount_7 = (n: number) => n > 0;
 export const isPositiveAmount_8 = (n: number) => n > 0;
 export const isPositiveAmount_9 = (n: number) => n > 0;
+export const isPositiveAmount_10 = (n: number) => n > 0;
