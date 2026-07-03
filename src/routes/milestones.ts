@@ -9,7 +9,7 @@
  *                        submitted transaction.
  */
 import { Router } from 'express';
-import { db } from '../db/connection';
+import { supabase } from '../db/connection';
 import { AppError } from '../errors/AppError';
 import { asyncHandler } from '../middleware/errorHandler';
 import { requireAuth } from '../auth/jwt';
@@ -26,7 +26,7 @@ function isStatus(value: unknown): value is MilestoneStatus {
 milestonesRouter.get(
   '/',
   asyncHandler(async (req, res) => {
-    const query = db('milestones').select('*').orderBy('id', 'asc');
+    let query = supabase.from('milestones').select('*').order('id', { ascending: true });
 
     const { vaultId, status } = req.query;
     if (vaultId !== undefined) {
@@ -34,7 +34,7 @@ milestonesRouter.get(
       if (!Number.isInteger(id) || id <= 0) {
         throw AppError.badRequest(`Invalid vaultId: ${String(vaultId)}`);
       }
-      query.where({ vault_id: id });
+      query = query.eq('vault_id', id);
     }
     if (status !== undefined) {
       if (!isStatus(status)) {
@@ -42,10 +42,12 @@ milestonesRouter.get(
           `Invalid status. Expected one of: ${VALID_STATUSES.join(', ')}`,
         );
       }
-      query.where({ status });
+      query = query.eq('status', status);
     }
 
-    const milestones = await query;
+    const { data: milestones, error } = await query;
+    if (error) throw new Error(error.message);
+
     res.json({ data: milestones });
   }),
 );
@@ -57,10 +59,17 @@ milestonesRouter.get(
     if (!Number.isInteger(id) || id <= 0) {
       throw AppError.badRequest(`Invalid milestone id: ${req.params.id}`);
     }
-    const milestone = await db('milestones').where({ id }).first();
-    if (!milestone) {
+    
+    const { data: milestone, error } = await supabase
+      .from('milestones')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error || !milestone) {
       throw AppError.notFound(`Milestone ${id} not found`);
     }
+
     res.json({ data: milestone });
   }),
 );
@@ -101,12 +110,18 @@ milestonesRouter.post(
       throw AppError.badRequest('amount is required (string to preserve i128 precision)');
     }
 
-    const vault = await db('vaults').where({ id: vaultId }).first();
-    if (!vault) {
+    const { data: vault, error: vaultError } = await supabase
+      .from('vaults')
+      .select('contract_id')
+      .eq('id', vaultId)
+      .single();
+
+    if (vaultError || !vault) {
       throw AppError.notFound(`Vault ${vaultId} not found`);
     }
 
-    const [inserted] = await db('milestones')
+    const { data: inserted, error: insertError } = await supabase
+      .from('milestones')
       .insert({
         vault_id: vaultId,
         title: body.title.trim(),
@@ -115,15 +130,19 @@ milestonesRouter.post(
         status: 'Proposed',
         recipient: body.recipient.trim(),
       })
-      .returning('*');
+      .select()
+      .single();
 
-    // Record the submitting transaction as an event for the reconciliation trail.
-    await db('events').insert({
+    if (insertError) throw new Error(insertError.message);
+
+    const { error: eventError } = await supabase.from('events').insert({
       type: 'milestone',
       tx_hash: body.tx_hash.trim(),
       contract_id: vault.contract_id,
       payload: JSON.stringify({ source: 'api', action: 'propose_milestone', vaultId }),
     });
+
+    if (eventError) throw new Error(eventError.message);
 
     res.status(201).json({ data: inserted });
   }),

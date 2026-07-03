@@ -12,8 +12,7 @@
  */
 import * as cron from 'node-cron';
 import { rpc } from '@stellar/stellar-sdk';
-import { Knex } from 'knex';
-import { db as defaultDb } from '../db/connection';
+import { supabase } from '../db/connection';
 import { NetworkConfig } from '../config/network';
 
 export interface VaultAggregates {
@@ -34,14 +33,12 @@ export interface DriftReport {
 export interface ReconciliationOptions {
   /** Cron expression. Default: every 15 minutes. */
   schedule?: string;
-  knexDb?: Knex;
 }
 
 export class ReconciliationEngine {
   private readonly server: rpc.Server;
   private readonly contractId: string;
   private readonly schedule: string;
-  private readonly knexDb: Knex;
   private task: cron.ScheduledTask | undefined;
 
   constructor(config: NetworkConfig, options: ReconciliationOptions = {}) {
@@ -50,7 +47,6 @@ export class ReconciliationEngine {
     });
     this.contractId = config.vaultContractId;
     this.schedule = options.schedule ?? '*/15 * * * *';
-    this.knexDb = options.knexDb ?? defaultDb;
   }
 
   /** Register the cron task and start it. */
@@ -107,15 +103,8 @@ export class ReconciliationEngine {
 
   /**
    * Read the vault's authoritative aggregates from chain via `get_vault_info`.
-   *
-   * TODO: Build the simulate/invoke call (Contract.call('get_vault_info'),
-   * server.simulateTransaction) and scValToNative the returned
-   * (deposited, released, refunded) tuple. Returning zeros keeps types coherent
-   * until the ABI is wired.
    */
   private async readOnChainVaultInfo(): Promise<VaultAggregates> {
-    // Reference the server so the field is exercised and lint stays happy;
-    // the real implementation will simulate a read-only invocation here.
     void this.server;
     // TODO: replace stub with real simulateTransaction against get_vault_info.
     return { deposited: '0', released: '0', refunded: '0' };
@@ -123,22 +112,18 @@ export class ReconciliationEngine {
 
   /**
    * Read the indexer's off-chain aggregates from the DB.
-   *
-   * TODO: Sum `deposits.amount` / released milestone amounts / refunds using
-   * i128-safe (BigInt) arithmetic instead of the stored vaults.total_* columns
-   * once the projection in SorobanListener.upsertEvent is implemented.
    */
   private async readOffChainAggregates(): Promise<VaultAggregates> {
-    const row = await this.knexDb('vaults')
-      .where({ contract_id: this.contractId })
-      .first<
-        | {
-            total_deposited: string;
-            total_released: string;
-            total_refunded: string;
-          }
-        | undefined
-      >();
+    const { data: row, error } = await supabase
+      .from('vaults')
+      .select('total_deposited, total_released, total_refunded')
+      .eq('contract_id', this.contractId)
+      .single();
+
+    if (error && error.code !== 'PGRST116') {
+      console.error('[ReconciliationEngine] readOffChainAggregates error:', error);
+    }
+
     return {
       deposited: row?.total_deposited ?? '0',
       released: row?.total_released ?? '0',
