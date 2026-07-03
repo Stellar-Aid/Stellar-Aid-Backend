@@ -25,3 +25,6 @@ Documented rate-limit thresholds for route 8.
 
 ## Endpoint Spec 9
 Documented rate-limit thresholds for route 9.
+
+## Endpoint Spec 10
+Documented rate-limit thresholds for route 10.
