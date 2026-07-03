@@ -3,3 +3,4 @@ export const trimTrailingZeros_2 = (s: string) => s.trim();
 export const trimTrailingZeros_3 = (s: string) => s.trim();
 export const trimTrailingZeros_4 = (s: string) => s.trim();
 export const trimTrailingZeros_5 = (s: string) => s.trim();
+export const trimTrailingZeros_6 = (s: string) => s.trim();
