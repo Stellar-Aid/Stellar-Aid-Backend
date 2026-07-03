@@ -16,3 +16,6 @@ Documented rate-limit thresholds for route 5.
 
 ## Endpoint Spec 6
 Documented rate-limit thresholds for route 6.
+
+## Endpoint Spec 7
+Documented rate-limit thresholds for route 7.
