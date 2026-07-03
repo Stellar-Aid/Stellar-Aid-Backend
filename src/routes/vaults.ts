@@ -8,7 +8,7 @@
  * All handlers are read-only projections of indexer-maintained DB state.
  */
 import { Router } from 'express';
-import { db } from '../db/connection';
+import { supabase } from '../db/connection';
 import { AppError } from '../errors/AppError';
 import { asyncHandler } from '../middleware/errorHandler';
 
@@ -25,7 +25,13 @@ function parseId(raw: string): number {
 vaultsRouter.get(
   '/',
   asyncHandler(async (_req, res) => {
-    const vaults = await db('vaults').select('*').orderBy('id', 'asc');
+    const { data: vaults, error } = await supabase
+      .from('vaults')
+      .select('*')
+      .order('id', { ascending: true });
+
+    if (error) throw new Error(error.message);
+
     res.json({ data: vaults });
   }),
 );
@@ -34,16 +40,30 @@ vaultsRouter.get(
   '/:id',
   asyncHandler(async (req, res) => {
     const id = parseId(req.params.id);
-    const vault = await db('vaults').where({ id }).first();
-    if (!vault) {
+    
+    const { data: vault, error: vaultError } = await supabase
+      .from('vaults')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (vaultError || !vault) {
       throw AppError.notFound(`Vault ${id} not found`);
     }
-    const [milestoneCount] = await db('milestones')
-      .where({ vault_id: id })
-      .count<{ count: number }[]>({ count: '*' });
-    const [depositCount] = await db('deposits')
-      .where({ vault_id: id })
-      .count<{ count: number }[]>({ count: '*' });
+
+    const { count: milestoneCount, error: msError } = await supabase
+      .from('milestones')
+      .select('*', { count: 'exact', head: true })
+      .eq('vault_id', id);
+
+    if (msError) throw new Error(msError.message);
+
+    const { count: depositCount, error: depError } = await supabase
+      .from('deposits')
+      .select('*', { count: 'exact', head: true })
+      .eq('vault_id', id);
+
+    if (depError) throw new Error(depError.message);
 
     res.json({
       data: {
@@ -52,8 +72,8 @@ vaultsRouter.get(
           total_deposited: vault.total_deposited,
           total_released: vault.total_released,
           total_refunded: vault.total_refunded,
-          milestone_count: Number(milestoneCount?.count ?? 0),
-          deposit_count: Number(depositCount?.count ?? 0),
+          milestone_count: Number(milestoneCount ?? 0),
+          deposit_count: Number(depositCount ?? 0),
         },
       },
     });
@@ -64,13 +84,26 @@ vaultsRouter.get(
   '/:id/deposits',
   asyncHandler(async (req, res) => {
     const id = parseId(req.params.id);
-    const vault = await db('vaults').where({ id }).first();
-    if (!vault) {
+    
+    // Check if vault exists first
+    const { data: vault, error: vaultError } = await supabase
+      .from('vaults')
+      .select('id')
+      .eq('id', id)
+      .single();
+
+    if (vaultError || !vault) {
       throw AppError.notFound(`Vault ${id} not found`);
     }
-    const deposits = await db('deposits')
-      .where({ vault_id: id })
-      .orderBy('id', 'desc');
+
+    const { data: deposits, error: depError } = await supabase
+      .from('deposits')
+      .select('*')
+      .eq('vault_id', id)
+      .order('id', { ascending: false });
+
+    if (depError) throw new Error(depError.message);
+
     res.json({ data: deposits });
   }),
 );

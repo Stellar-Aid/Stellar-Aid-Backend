@@ -1,37 +1,18 @@
-/**
- * Knex connection singleton backed by better-sqlite3.
- *
- * i128 on-chain amounts are stored as TEXT to preserve full precision — never
- * as JS numbers/floats. See migrations for the schema.
- */
-import knex, { Knex } from 'knex';
+import { createClient } from '@supabase/supabase-js';
 
-const DB_FILE = process.env.DB_FILE ?? './stellaraid.db';
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-export const knexConfig: Knex.Config = {
-  client: 'better-sqlite3',
-  connection: {
-    filename: DB_FILE,
-  },
-  // better-sqlite3 does not support inserting `undefined`; nulls must be explicit.
-  useNullAsDefault: true,
-  pool: {
-    // Enforce foreign keys on every connection.
-    afterCreate: (conn: { pragma?: (s: string) => void }, done: (err?: Error) => void) => {
-      try {
-        conn.pragma?.('foreign_keys = ON');
-        done();
-      } catch (err) {
-        done(err as Error);
-      }
-    },
-  },
-};
+if (!supabaseUrl || !supabaseKey) {
+  throw new Error('FATAL: Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variables.');
+}
 
-/** Shared singleton knex instance for the whole process. */
-export const db: Knex = knex(knexConfig);
+// Export the Supabase client instance using the Service Role Key to bypass RLS
+export const supabase = createClient(supabaseUrl, supabaseKey);
 
-/** Gracefully close the DB pool (used in tests / shutdown). */
+// Maintain compatibility for test tear-downs if needed, or deprecate this.
 export async function closeDb(): Promise<void> {
-  await db.destroy();
+  // Supabase JS doesn't require explicit pool destruction like Knex.
+  // This is left as a no-op to prevent test harness crashes until they are refactored.
+  return Promise.resolve();
 }
