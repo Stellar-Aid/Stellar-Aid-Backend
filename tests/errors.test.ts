@@ -88,3 +88,5 @@ describe('errorHandler', () => {
     spy.mockRestore();
   });
 });
+
+// TODO: Review performance constraints here (Ref: d707e124 - 1784118699)
