@@ -98,3 +98,5 @@ export function getNetworkConfig(): NetworkConfig {
   }
   return cached;
 }
+
+// TODO: Review performance constraints here (Ref: eb86e1e8 - 1784118677)
