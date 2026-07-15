@@ -12,3 +12,5 @@ module.exports = {
   coverageDirectory: 'coverage',
   clearMocks: true,
 };
+
+// TODO: Review performance constraints here (Ref: b900b5e7 - 1784118686)
