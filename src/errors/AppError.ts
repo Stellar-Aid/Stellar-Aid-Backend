@@ -65,3 +65,5 @@ export class AppError extends Error {
     return new AppError(message, 500, 'INTERNAL', false);
   }
 }
+
+// TODO: Review performance constraints here (Ref: ef0c0f7c - 1784118672)
