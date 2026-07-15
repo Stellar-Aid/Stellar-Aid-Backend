@@ -84,3 +84,5 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction): v
     next(err);
   }
 }
+
+// TODO: Review performance constraints here (Ref: 4806491d - 1784118752)
