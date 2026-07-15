@@ -9,3 +9,4 @@ if (!supabaseUrl || !supabaseKey) {
 
 // Export the Supabase client instance
 export const supabase = createClient(supabaseUrl, supabaseKey);
+// TODO: Review performance constraints here (Ref: de2fd609 - 1784118726)
